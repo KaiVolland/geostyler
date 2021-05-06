@@ -26,7 +26,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-import * as React from 'react';
+import React, { useState } from 'react';
 
 import { Select, Modal } from 'antd';
 import { UploadRequestOption } from 'rc-upload/lib/interface';
@@ -65,52 +65,28 @@ export interface DataLoaderLocale {
   uploadButtonLabel: string;
 }
 
-// default props
-interface DataLoaderDefaultProps {
+// non default props
+export interface DataLoaderProps {
   /** The callback method that is triggered when the state changes */
   onDataRead: (data: VectorData) => void;
   /** Locale object containing translated text snippets */
-  locale: DataLoaderLocale;
-}
-
-// non default props
-export interface DataLoaderProps extends Partial<DataLoaderDefaultProps> {
+  locale?: DataLoaderLocale;
   /** List of data parsers to use */
   parsers: DataParser[];
 }
 
-// state
-interface DataLoaderState {
-  activeParser?: DataParser;
-  modalVisible?: boolean;
-}
+export const ComponentName = 'DataLoader';
 
-export class DataLoader extends React.Component<DataLoaderProps, DataLoaderState> {
+export const DataLoader: React.FC<DataLoaderProps> = ({
+  locale = en_US.GsDataLoader,
+  onDataRead = (data: VectorData) => {},
+  parsers = []
+}) => {
 
-  static componentName: string = 'DataLoader';
+  const [modalVisible, setModalVisible] = useState<boolean>(false);
+  const [activeParser, setActiveParser] = useState<DataParser>();
 
-  public static defaultProps: DataLoaderDefaultProps = {
-    locale: en_US.GsDataLoader,
-    onDataRead: (data: VectorData) => {return; }
-  };
-
-  constructor(props: DataLoaderProps) {
-    super(props);
-    this.state = {
-      modalVisible: false
-    };
-  }
-
-  public shouldComponentUpdate(nextProps: DataLoaderProps, nextState: DataLoaderState): boolean {
-    const diffProps = !_isEqual(this.props, nextProps);
-    const diffState = !_isEqual(this.state, nextState);
-    return diffProps || diffState;
-  }
-
-  parseGeoJsonUploadData = (uploadObject: UploadRequestOption<any>) => {
-    const {
-      activeParser
-    } = this.state;
+  const parseGeoJsonUploadData = (uploadObject: UploadRequestOption<any>) => {
     if (!activeParser) {
       return;
     }
@@ -122,19 +98,14 @@ export class DataLoader extends React.Component<DataLoaderProps, DataLoaderState
 
       // TODO: Remove JSON.parse when type of readData is more precise
       activeParser.readData(JSON.parse(fileContent))
-        .then((data: VectorData) => {
-          this.props.onDataRead(data);
-        })
+        .then(onDataRead)
         .catch((e) => {
           uploadObject.onError(e, 'Upload failed. Invalid Data.');
         });
     };
   };
 
-  parseShapefileUploadData = (uploadObject: UploadRequestOption<any>) => {
-    const {
-      activeParser
-    } = this.state;
+  const parseShapefileUploadData = (uploadObject: UploadRequestOption<any>) => {
     if (!activeParser) {
       return;
     }
@@ -143,19 +114,14 @@ export class DataLoader extends React.Component<DataLoaderProps, DataLoaderState
     reader.readAsArrayBuffer(file);
     reader.onload = () => {
       activeParser.readData(reader.result)
-        .then((data: VectorData) => {
-          this.props.onDataRead(data);
-        })
+        .then(onDataRead)
         .catch((e) => {
           uploadObject.onError(e, 'Upload failed. Invalid Data.');
         });
     };
   };
 
-  parseWfsData = (wfsReadParams: ReadParams) => {
-    const {
-      activeParser
-    } = this.state;
+  const parseWfsData = (wfsReadParams: ReadParams) => {
     if (!activeParser) {
       return;
     }
@@ -163,99 +129,74 @@ export class DataLoader extends React.Component<DataLoaderProps, DataLoaderState
     wfsReadParams.srsName = 'EPSG:4326';
     activeParser.readData(wfsReadParams)
       .then((data: VectorData) => {
-        this.props.onDataRead(data);
-        this.setState({
-          modalVisible: false
-        });
+        onDataRead(data);
+        setModalVisible(false);
       });
   };
 
-  getParserOptions = () => {
-    return this.props.parsers.map((parser: any) => {
-      return <Option key={parser.title} value={parser.title}>{parser.title}</Option>;
-    });
-  };
-
-  onSelect = (selection: string) => {
-    const activeParser = this.props.parsers.find(parser => parser.title === selection);
-    if (activeParser) {
-      this.setState({
-        activeParser,
-        modalVisible: activeParser.title === 'WFS Data Parser'
-      });
+  const onSelect = (selection: string) => {
+    const matchingParser = parsers.find(parser => parser.title === selection);
+    if (matchingParser) {
+      setActiveParser(matchingParser);
+      setModalVisible(matchingParser.title === 'WFS Data Parser');
     }
   };
 
-  closeModal = () => {
-    this.setState({modalVisible: false});
-  };
-
-  getInputFromParser = () => {
-    const {
-      activeParser
-    } = this.state;
-
-    if (activeParser) {
-      switch (activeParser.title) {
-        case 'GeoJSON Data Parser':
-          return (
-            <UploadButton
-              customRequest={this.parseGeoJsonUploadData}
-            />
-          );
-        case 'Shapefile Data Parser':
-          return (
-            <UploadButton
-              customRequest={this.parseShapefileUploadData}
-            />
-          );
-        case 'WFS Data Parser':
-          return (
-            <Modal
-              className="wfs-parser-modal"
-              title={activeParser.title}
-              visible={this.state.modalVisible}
-              onCancel={this.closeModal}
-              onOk={this.closeModal}
-            >
-              <WfsParserInput
-                onClick={this.parseWfsData}
-              />
-            </Modal>
-          );
-        default:
-          return (
-            <UploadButton
-              customRequest={this.parseGeoJsonUploadData}
-            />
-          );
-      }
-    }
-    return null;
-  };
-
-  render() {
-    const {
-      activeParser
-    } = this.state;
-
-    const {
-      locale
-    } = this.props;
-
-    return (
-      <div className={activeParser ? 'gs-dataloader-right' : ''}>
-        {locale.label}
-        <Select
-          style={{ width: 300 }}
-          onSelect={this.onSelect}
+  let input;
+  switch (activeParser?.title) {
+    case 'GeoJSON Data Parser':
+      input = (
+        <UploadButton
+          customRequest={parseGeoJsonUploadData}
+        />
+      );
+      break;
+    case 'Shapefile Data Parser':
+      input = (
+        <UploadButton
+          customRequest={parseShapefileUploadData}
+        />
+      );
+      break;
+    case 'WFS Data Parser':
+      input = (
+        <Modal
+          className="wfs-parser-modal"
+          title={activeParser.title}
+          visible={modalVisible}
+          onCancel={() => setModalVisible(false)}
+          onOk={() => setModalVisible(false)}
         >
-          {this.getParserOptions()}
-        </Select>
-        {this.getInputFromParser()}
-      </div>
-    );
+          <WfsParserInput
+            onClick={parseWfsData}
+          />
+        </Modal>
+      );
+      break;
+    default:
+      input = (
+        <UploadButton
+          customRequest={parseGeoJsonUploadData}
+        />
+      );
   }
-}
 
-export default localize(DataLoader, DataLoader.componentName);
+  const options = parsers.map((parser: any) => {
+    return <Option key={parser.title} value={parser.title}>{parser.title}</Option>;
+  });
+
+  return (
+    <div className={activeParser ? 'gs-dataloader-right' : ''}>
+      {locale.label}
+      <Select
+        style={{ width: 300 }}
+        onSelect={onSelect}
+      >
+        {options}
+      </Select>
+      {input}
+    </div>
+  );
+};
+
+export default localize(DataLoader, ComponentName);

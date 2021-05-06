@@ -42,7 +42,7 @@ describe('ImageField', () => {
     expect(ImageField).toBeDefined();
   });
 
-  test('… renders', async () => {
+  it('… renders', async () => {
     expect(imageField.container).toBeInTheDocument();
   });
 

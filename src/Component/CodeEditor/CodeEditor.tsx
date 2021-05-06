@@ -90,7 +90,7 @@ export interface CodeEditorProps {
 const MODELPATH = 'geostyler.json';  // associate with our model
 const SCHEMAURI = schema.$id;
 
-export const COMPONENTNAME = 'CodeEditor';
+export const ComponentName = 'CodeEditor';
 
 export const CodeEditor: React.FC<CodeEditorProps> = ({
   defaultParser,
@@ -294,4 +294,4 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   );
 };
 
-export default localize(CodeEditor, COMPONENTNAME);
+export default localize(CodeEditor, ComponentName);
